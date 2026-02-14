@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+python-multipart
+sqlalchemy
+pydantic
+httpx
+aiofiles
+python-dotenv
+paramiko
+passlib[bcrypt]
+bcrypt==4.0.1
+python-jose[cryptography]
+psycopg2-binary
