@@ -19,6 +19,7 @@ class _HomeScreenNewState extends State<HomeScreenNew> {
   late Future<List<Memo>> _memosFuture;
   Timer? _refreshTimer;
   String _searchQuery = '';
+  String? _selectedTag;
 
   @override
   void initState() {
@@ -68,10 +69,17 @@ class _HomeScreenNewState extends State<HomeScreenNew> {
   }
 
   List<Memo> _filterMemos(List<Memo> memos) {
-    if (_searchQuery.isEmpty) return memos;
+    // 先按标签筛选
+    var filtered = memos;
+    if (_selectedTag != null) {
+      filtered = memos.where((memo) => memo.tags.contains(_selectedTag)).toList();
+    }
+
+    // 再按搜索关键词筛选
+    if (_searchQuery.isEmpty) return filtered;
 
     final query = _searchQuery.toLowerCase();
-    return memos.where((memo) {
+    return filtered.where((memo) {
       // 搜索转录文本
       if (memo.transcription?.toLowerCase().contains(query) == true) {
         return true;
@@ -89,6 +97,16 @@ class _HomeScreenNewState extends State<HomeScreenNew> {
 
       return false;
     }).toList();
+  }
+
+  // 获取所有唯一的标签
+  List<String> _getAllTags(List<Memo> memos) {
+    final tagSet = <String>{};
+    for (final memo in memos) {
+      tagSet.addAll(memo.tags);
+    }
+    final tags = tagSet.toList()..sort();
+    return tags;
   }
 
   Future<void> _handleRefresh() async {
@@ -126,6 +144,8 @@ class _HomeScreenNewState extends State<HomeScreenNew> {
               _buildHeader(),
               const SizedBox(height: 16),
               _buildSearchBox(),
+              const SizedBox(height: 12),
+              _buildTagFilter(),
               const SizedBox(height: 24),
               _buildQuickRecord(context),
               const SizedBox(height: 24),
@@ -234,6 +254,132 @@ class _HomeScreenNewState extends State<HomeScreenNew> {
     );
   }
 
+  Widget _buildTagFilter() {
+    return FutureBuilder<List<Memo>>(
+      future: _memosFuture,
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final tags = _getAllTags(snapshot.data!);
+
+        if (tags.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        // 统计每个标签的笔记数量
+        final tagCounts = <String, int>{};
+        for (final memo in snapshot.data!) {
+          for (final tag in memo.tags) {
+            tagCounts[tag] = (tagCounts[tag] ?? 0) + 1;
+          }
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  '标签筛选',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF164E63),
+                  ),
+                ),
+                if (_selectedTag != null)
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _selectedTag = null;
+                      });
+                    },
+                    child: const Text(
+                      '清除',
+                      style: TextStyle(
+                        color: Color(0xFF0891B2),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 32,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: tags.length,
+                itemBuilder: (context, index) {
+                  final tag = tags[index];
+                  final count = tagCounts[tag] ?? 0;
+                  final isSelected = tag == _selectedTag;
+                  final tagColor = _getTagColor(tag);
+
+                  return Padding(
+                    padding: EdgeInsets.only(right: index == tags.length - 1 ? 0 : 8),
+                    child: FilterChip(
+                      label: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            tag,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isSelected ? Colors.white : tagColor,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? Colors.white.withOpacity(0.3)
+                                  : tagColor.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '$count',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: isSelected ? Colors.white : tagColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      selected: isSelected,
+                      onSelected: (selected) {
+                        setState(() {
+                          _selectedTag = selected ? tag : null;
+                        });
+                      },
+                      selectedColor: tagColor,
+                      backgroundColor: tagColor.withOpacity(0.1),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(
+                          color: tagColor.withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildQuickRecord(BuildContext context) {
     return GlassCard(
       onTap: () => _showRecordingSheet(context),
@@ -285,16 +431,32 @@ class _HomeScreenNewState extends State<HomeScreenNew> {
       future: _memosFuture,
       builder: (context, snapshot) {
         int memoCount = 0;
+        int insightCount = 0;
+        Map<String, int> moodDistribution = {};
+
         if (snapshot.hasData) {
           memoCount = snapshot.data!.length;
+
+          // 统计有摘要的笔记数量（洞察发现）
+          insightCount = snapshot.data!
+              .where((memo) => memo.summary != null && memo.summary!.isNotEmpty)
+              .length;
+
+          // 统计情绪分布
+          for (final memo in snapshot.data!) {
+            if (memo.moodLabel != null) {
+              moodDistribution[memo.moodLabel!] =
+                  (moodDistribution[memo.moodLabel!] ?? 0) + 1;
+            }
+          }
         }
 
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             _buildStatItem('$memoCount', '思维胶囊'),
-            _buildStatItem('${memoCount * 2}m', '记录时长'),
-            _buildStatItem('${memoCount > 0 ? memoCount + 5 : 0}', '洞察发现'),
+            _buildStatItem('$insightCount', '洞察发现'),
+            _buildStatItem('${moodDistribution.length}', '情绪类型'),
           ],
         );
       },
@@ -324,6 +486,18 @@ class _HomeScreenNewState extends State<HomeScreenNew> {
     );
   }
 
+  String _getTitleText() {
+    if (_searchQuery.isNotEmpty && _selectedTag != null) {
+      return '筛选结果: "$_searchQuery" + $_selectedTag';
+    } else if (_searchQuery.isNotEmpty) {
+      return '搜索结果: "$_searchQuery"';
+    } else if (_selectedTag != null) {
+      return '标签: $_selectedTag';
+    } else {
+      return '最近记录';
+    }
+  }
+
   Widget _buildRecentMemos() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -332,7 +506,7 @@ class _HomeScreenNewState extends State<HomeScreenNew> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              _searchQuery.isEmpty ? '最近记录' : '搜索结果',
+              _getTitleText(),
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -532,13 +706,49 @@ class _HomeScreenNewState extends State<HomeScreenNew> {
   }
 
   Color _getTagColor(String tag) {
+    // 预设标签颜色映射
     final colors = {
-      '工作': const Color(0xFF0891B2),
-      '情绪': const Color(0xFF059669),
-      '灵感': const Color(0xFF8B5CF6),
-      '生活': const Color(0xFFEC4899),
+      '工作': const Color(0xFF0891B2), // Cyan
+      '情绪': const Color(0xFF059669), // Green
+      '灵感': const Color(0xFF8B5CF6), // Purple
+      '生活': const Color(0xFFEC4899), // Pink
+      '学习': const Color(0xFF3B82F6), // Blue
+      '会议': const Color(0xFFF59E0B), // Amber
+      '想法': const Color(0xFFEF4444), // Red
+      '项目': const Color(0xFF10B981), // Emerald
+      '健康': const Color(0xFF6366F1), // Indigo
+      '旅行': const Color(0xFF8B5CF6), // Violet
+      '家庭': const Color(0xFFF43F5E), // Rose
+      '财务': const Color(0xFF0EA5E9), // Sky
+      '购物': const Color(0xFFF97316), // Orange
+      '娱乐': const Color(0xFFA855F7), // Purple
+      '运动': const Color(0xFF14B8A6), // Teal
+      '社交': const Color(0xFFEC4899), // Pink
+      '未分类': const Color(0xFF64748B), // Slate
     };
-    return colors[tag] ?? const Color(0xFF0891B2);
+
+    // 如果是预设标签，返回预设颜色
+    if (colors.containsKey(tag)) {
+      return colors[tag]!;
+    }
+
+    // 为未知标签生成基于哈希的一致性颜色
+    final hashCode = tag.hashCode;
+    final colorOptions = [
+      const Color(0xFF0891B2), // Cyan
+      const Color(0xFF059669), // Green
+      const Color(0xFF8B5CF6), // Purple
+      const Color(0xFFEC4899), // Pink
+      const Color(0xFF3B82F6), // Blue
+      const Color(0xFFF59E0B), // Amber
+      const Color(0xFFEF4444), // Red
+      const Color(0xFF10B981), // Emerald
+      const Color(0xFF6366F1), // Indigo
+      const Color(0xFF0EA5E9), // Sky
+    ];
+
+    final index = hashCode.abs() % colorOptions.length;
+    return colorOptions[index];
   }
 
   IconData _getMoodIcon(double? score) {
