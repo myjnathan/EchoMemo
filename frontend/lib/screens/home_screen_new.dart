@@ -32,9 +32,10 @@ class _HomeScreenNewState extends State<HomeScreenNew> {
     super.dispose();
   }
 
-  void _refreshMemos() {
+  void _refreshMemos({bool forceRefresh = false}) {
     setState(() {
-      _memosFuture = Provider.of<ApiService>(context, listen: false).getMemos();
+      _memosFuture = Provider.of<ApiService>(context, listen: false)
+          .getMemos(forceRefresh: forceRefresh);
     });
     _startAutoRefreshIfNeeded();
   }
@@ -95,8 +96,8 @@ class _HomeScreenNewState extends State<HomeScreenNew> {
     _refreshTimer?.cancel();
     _refreshTimer = null;
 
-    // 刷新数据
-    _refreshMemos();
+    // 强制刷新数据
+    _refreshMemos(forceRefresh: true);
 
     // 等待一小段时间确保刷新完成
     await Future.delayed(const Duration(milliseconds: 500));
@@ -559,9 +560,9 @@ class _HomeScreenNewState extends State<HomeScreenNew> {
       builder: (context) => const RecorderScreenNew(),
     );
 
-    // 如果成功上传录音，刷新列表
+    // 如果成功上传录音，强制刷新列表
     if (result == true && mounted) {
-      _refreshMemos();
+      _refreshMemos(forceRefresh: true);
     }
   }
 }
