@@ -84,12 +84,20 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  void _showRecordingSheet(BuildContext context) {
-    showModalBottomSheet(
+  void _showRecordingSheet(BuildContext context) async {
+    final result = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      isDismissible: false, // 禁止点击外部关闭
+      enableDrag: false, // 禁止拖动关闭
       builder: (context) => const RecorderScreenNew(),
     );
+
+    // 如果成功上传录音，触发首页刷新
+    if (result == true && mounted) {
+      // 通过setState触发首页重建，从而刷新数据
+      setState(() {});
+    }
   }
 }

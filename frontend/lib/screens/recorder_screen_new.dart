@@ -114,13 +114,14 @@ class _RecorderScreenNewState extends State<RecorderScreenNew> with SingleTicker
       await apiService.uploadAudio(path);
 
       if (mounted) {
-        Navigator.pop(context); // Close modal on success
-
         // 显示成功提示
         ErrorHandler.showSuccess(
           context: context,
           message: '上传成功，AI正在处理...',
         );
+
+        // Close modal and notify home screen to refresh
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
@@ -289,9 +290,14 @@ class _RecorderScreenNewState extends State<RecorderScreenNew> with SingleTicker
           ),
         ),
         const SizedBox(width: 24),
-        GlassCard(
-          padding: const EdgeInsets.all(12),
-          child: const Icon(Icons.close, color: Color(0xFF164E63)),
+        GestureDetector(
+          onTap: () {
+            Navigator.pop(context);
+          },
+          child: GlassCard(
+            padding: const EdgeInsets.all(12),
+            child: const Icon(Icons.close, color: Color(0xFF164E63)),
+          ),
         ),
       ],
     );

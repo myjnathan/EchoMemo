@@ -549,13 +549,20 @@ class _HomeScreenNewState extends State<HomeScreenNew> {
     return Icons.sentiment_neutral;
   }
 
-  void _showRecordingSheet(BuildContext context) {
-    showModalBottomSheet(
+  void _showRecordingSheet(BuildContext context) async {
+    final result = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      isDismissible: false, // 禁止点击外部关闭
+      enableDrag: false, // 禁止拖动关闭
       builder: (context) => const RecorderScreenNew(),
     );
+
+    // 如果成功上传录音，刷新列表
+    if (result == true && mounted) {
+      _refreshMemos();
+    }
   }
 }
 
