@@ -1,19 +1,20 @@
 # Milestone Checklist / 里程碑检查清单
 
-**Last Updated**: 2025-02-15
-**Current Phase**: Phase 1 - Week 2 of 6
+**Last Updated**: 2026-02-16
+**Current Phase**: Phase 1 (P0/P1 Complete) → Phase 2 Preparation
+**Overall Status**: Phase 1 Core Features Complete ✅
 
 ---
 
 ## 📊 Overall Progress / 总体进度
 
 ```
-Phase 1: The Container     [████░░░░░░░░] 15%
+Phase 1: The Container     [████████████░] 85% (P0/P1 ✅, P2 🚧)
 Phase 2: The Weaver         [░░░░░░░░░░░░] 0%
 Phase 3: The Mirror         [░░░░░░░░░░░░] 0%
 Phase 4: The Symbiosis      [░░░░░░░░░░░░] 0%
 
-Total Project: [██░░░░░░░░░] 4%
+Total Project: [███░░░░░░░░] 21%
 ```
 
 ---

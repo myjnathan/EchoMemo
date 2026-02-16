@@ -294,3 +294,51 @@ async def delete_memo(
     logger.info(f"✅ 已删除 Memo #{memo_id}")
 
     return {"message": "Memo deleted successfully", "id": memo_id}
+
+@app.put("/memos/{memo_id}", response_model=schemas.MemoResponse)
+async def update_memo(
+    memo_id: int,
+    memo_update: schemas.MemoUpdate,
+    db: Session = Depends(get_db)
+    # MVP模式：移除认证依赖，更新默认用户（id=1）的memo
+    # current_user: models.User = Depends(get_current_user)
+):
+    """
+    更新memo的字段（转写文本、摘要、标签）
+
+    支持部分更新，只更新提供的字段
+    """
+    # MVP模式：硬编码查询默认用户（id=1）的memo
+    memo = db.query(models.Memo)\
+        .filter(models.Memo.id == memo_id, models.Memo.user_id == 1)\
+        .first()
+
+    if not memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+
+    # 更新提供的字段
+    update_data = memo_update.model_dump(exclude_unset=True)
+    logger.info(f"📝 更新 Memo #{memo_id}, 字段: {update_data.keys()}")
+
+    if "transcription" in update_data:
+        memo.transcription = update_data["transcription"]
+        logger.info(f"  - 转写文本已更新 ({len(update_data['transcription'])} 字符)")
+
+    if "summary" in update_data:
+        memo.summary = update_data["summary"]
+        logger.info(f"  - 摘要已更新")
+
+    if "tags" in update_data:
+        memo.tags = update_data["tags"]
+        logger.info(f"  - 标签已更新: {memo.tags}")
+
+    try:
+        db.commit()
+        db.refresh(memo)
+        logger.info(f"✅ Memo #{memo_id} 更新成功!")
+        return memo
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ 更新 Memo #{memo_id} 失败: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update memo: {str(e)}")
+

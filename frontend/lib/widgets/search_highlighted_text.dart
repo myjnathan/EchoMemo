@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/app_constants.dart';
 
 class SearchHighlightedText extends StatelessWidget {
   final String text;
@@ -59,10 +60,10 @@ class SearchHighlightedText extends StatelessWidget {
       );
     }
 
-    // 构建高亮文本
-    final defaultStyle = style ?? const TextStyle(color: Color(0xFF164E63), fontSize: 14);
+    // 构建高亮文本（使用新的常量）
+    final defaultStyle = style ?? const TextStyle(color: AppColors.onSurface, fontSize: 14);
     final highlightStyle = defaultStyle.copyWith(
-      backgroundColor: const Color(0xFFFFEB3B),
+      backgroundColor: AppColors.highlight,
       color: Colors.black,
       fontWeight: FontWeight.bold,
     );
@@ -109,3 +110,4 @@ class _TextMatch {
   final int end;
   _TextMatch(this.start, this.end);
 }
+

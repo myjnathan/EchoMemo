@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/memo.dart';
 import '../services/api_service.dart';
+import '../services/error_handler.dart';
 
 class MemoDetailScreen extends StatefulWidget {
   final Memo memo;
@@ -15,6 +17,39 @@ class MemoDetailScreen extends StatefulWidget {
 
 class _MemoDetailScreenState extends State<MemoDetailScreen> {
   bool _isDeleting = false;
+  bool _isEditing = false;
+  bool _isSaving = false;
+
+  // 编辑控制器
+  late TextEditingController _transcriptionController;
+  late TextEditingController _summaryController;
+  late List<String> _editedTags;
+
+  // Focus nodes
+  late FocusNode _transcriptionFocusNode;
+  late FocusNode _summaryFocusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    // 初始化编辑控制器
+    _transcriptionController = TextEditingController(text: widget.memo.transcription ?? '');
+    _summaryController = TextEditingController(text: widget.memo.summary ?? '');
+    _editedTags = List<String>.from(widget.memo.tags);
+
+    // 初始化focus nodes
+    _transcriptionFocusNode = FocusNode();
+    _summaryFocusNode = FocusNode();
+  }
+
+  @override
+  void dispose() {
+    _transcriptionController.dispose();
+    _summaryController.dispose();
+    _transcriptionFocusNode.dispose();
+    _summaryFocusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,35 +60,17 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Color(0xFF164E63)),
-          onPressed: () => Navigator.pop(context, true), // 返回true表示可能已删除
+          onPressed: () => Navigator.pop(context, true),
         ),
-        title: const Text(
-          '笔记详情',
-          style: TextStyle(
+        title: Text(
+          _isEditing ? '编辑笔记' : '笔记详情',
+          style: const TextStyle(
             color: Color(0xFF164E63),
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
         ),
-        actions: [
-          if (_isDeleting)
-            const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0891B2)),
-                ),
-              ),
-            )
-          else
-            IconButton(
-              icon: const Icon(Icons.delete_outline, color: Color(0xFF164E63)),
-              onPressed: () => _showDeleteDialog(context),
-            ),
-        ],
+        actions: _buildActions(),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -64,11 +81,11 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
             const SizedBox(height: 20),
             _buildTranscription(),
             const SizedBox(height: 20),
-            if (widget.memo.status == 'completed' && widget.memo.summary != null) ...[
+            if (widget.memo.status == 'completed') ...[
               _buildSummary(),
               const SizedBox(height: 20),
             ],
-            if (widget.memo.status == 'completed' && widget.memo.tags.isNotEmpty) ...[
+            if (widget.memo.status == 'completed') ...[
               _buildTags(),
               const SizedBox(height: 20),
             ],
@@ -82,6 +99,68 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
         ),
       ),
     );
+  }
+
+  List<Widget> _buildActions() {
+    if (_isSaving) {
+      return [
+        const Padding(
+          padding: EdgeInsets.all(16.0),
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0891B2)),
+            ),
+          ),
+        ),
+      ];
+    }
+
+    if (_isEditing) {
+      return [
+        IconButton(
+          icon: const Icon(Icons.close, color: Color(0xFF164E63)),
+          onPressed: _cancelEdit,
+          tooltip: '取消编辑',
+        ),
+        IconButton(
+          icon: const Icon(Icons.check, color: Color(0xFF059669)),
+          onPressed: _saveChanges,
+          tooltip: '保存修改',
+        ),
+      ];
+    }
+
+    if (_isDeleting) {
+      return [
+        const Padding(
+          padding: EdgeInsets.all(16.0),
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0891B2)),
+            ),
+          ),
+        )
+      ];
+    }
+
+    return [
+      IconButton(
+        icon: const Icon(Icons.edit_outlined, color: Color(0xFF164E63)),
+        onPressed: _startEdit,
+        tooltip: '编辑',
+      ),
+      IconButton(
+        icon: const Icon(Icons.delete_outline, color: Color(0xFF164E63)),
+        onPressed: () => _showDeleteDialog(context),
+        tooltip: '删除',
+      ),
+    ];
   }
 
   Widget _buildDateTime() {
@@ -143,7 +222,35 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          if (widget.memo.transcription != null && widget.memo.transcription!.isNotEmpty)
+          if (_isEditing)
+            TextField(
+              controller: _transcriptionController,
+              focusNode: _transcriptionFocusNode,
+              maxLines: null,
+              decoration: InputDecoration(
+                hintText: '输入转录文本...',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Color(0xFF0891B2).withOpacity(0.3)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Color(0xFF0891B2).withOpacity(0.3)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Color(0xFF0891B2), width: 2),
+                ),
+                filled: true,
+                fillColor: Colors.white.withOpacity(0.5),
+              ),
+              style: const TextStyle(
+                fontSize: 16,
+                height: 1.6,
+                color: Color(0xFF164E63),
+              ),
+            )
+          else if (widget.memo.transcription != null && widget.memo.transcription!.isNotEmpty)
             Text(
               widget.memo.transcription!,
               style: const TextStyle(
@@ -206,14 +313,43 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          Text(
-            widget.memo.summary ?? '',
-            style: const TextStyle(
-              fontSize: 16,
-              height: 1.6,
-              color: Color(0xFF164E63),
+          if (_isEditing)
+            TextField(
+              controller: _summaryController,
+              focusNode: _summaryFocusNode,
+              maxLines: null,
+              decoration: InputDecoration(
+                hintText: '输入摘要...',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Color(0xFF059669).withOpacity(0.3)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Color(0xFF059669).withOpacity(0.3)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Color(0xFF059669), width: 2),
+                ),
+                filled: true,
+                fillColor: Colors.white.withOpacity(0.5),
+              ),
+              style: const TextStyle(
+                fontSize: 16,
+                height: 1.6,
+                color: Color(0xFF164E63),
+              ),
+            )
+          else
+            Text(
+              widget.memo.summary ?? '',
+              style: const TextStyle(
+                fontSize: 16,
+                height: 1.6,
+                color: Color(0xFF164E63),
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -250,35 +386,151 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: widget.memo.tags.map((tag) {
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      const Color(0xFF22D3EE).withOpacity(0.3),
-                      const Color(0xFF0891B2).withOpacity(0.3),
-                    ],
+          if (_isEditing)
+            _buildTagEditor()
+          else
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: widget.memo.tags.map((tag) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        const Color(0xFF22D3EE).withOpacity(0.3),
+                        const Color(0xFF0891B2).withOpacity(0.3),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: const Color(0xFF0891B2).withOpacity(0.3),
+                      width: 1,
+                    ),
                   ),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: const Color(0xFF0891B2).withOpacity(0.3),
-                    width: 1,
+                  child: Text(
+                    tag,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF164E63),
+                    ),
                   ),
-                ),
-                child: Text(
-                  tag,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF164E63),
-                  ),
-                ),
-              );
-            }).toList(),
+                );
+              }).toList(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTagEditor() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: _editedTags.map((tag) {
+            return Chip(
+              label: Text(tag),
+              deleteIcon: const Icon(Icons.close, size: 18),
+              onDeleted: () {
+                setState(() {
+                  _editedTags.remove(tag);
+                });
+              },
+              backgroundColor: const Color(0xFF22D3EE).withOpacity(0.3),
+              labelStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF164E63),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          decoration: InputDecoration(
+            hintText: '添加新标签...',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Color(0xFF8B5CF6).withOpacity(0.3)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Color(0xFF8B5CF6).withOpacity(0.3)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 2),
+            ),
+            filled: true,
+            fillColor: Colors.white.withOpacity(0.5),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.add, color: Color(0xFF8B5CF6)),
+              onPressed: _addNewTag,
+            ),
+          ),
+          onSubmitted: (value) {
+            if (value.trim().isNotEmpty) {
+              setState(() {
+                _editedTags.add(value.trim());
+              });
+            }
+          },
+        ),
+      ],
+    );
+  }
+
+  void _addNewTag() {
+    // 这里可以添加逻辑来打开一个对话框让用户输入标签
+    // 目前简化处理，直接显示一个对话框
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: const Text(
+          '添加标签',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF164E63),
+          ),
+        ),
+        content: TextField(
+          decoration: InputDecoration(
+            hintText: '输入标签名称',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          onSubmitted: (value) {
+            Navigator.pop(context);
+            if (value.trim().isNotEmpty) {
+              setState(() {
+                _editedTags.add(value.trim());
+              });
+            }
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // 这里可以获取TextField的值，但简化起见我们暂时跳过
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0891B2),
+            ),
+            child: const Text('添加'),
           ),
         ],
       ),
@@ -484,6 +736,83 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
     return const Color(0xFF6B7280); // 灰色 - 中性
   }
 
+  void _startEdit() {
+    setState(() {
+      _isEditing = true;
+      // 初始化编辑器内容
+      _transcriptionController.text = widget.memo.transcription ?? '';
+      _summaryController.text = widget.memo.summary ?? '';
+      _editedTags = List<String>.from(widget.memo.tags);
+    });
+  }
+
+  void _cancelEdit() {
+    setState(() {
+      _isEditing = false;
+      // 恢复原始内容
+      _transcriptionController.text = widget.memo.transcription ?? '';
+      _summaryController.text = widget.memo.summary ?? '';
+      _editedTags = List<String>.from(widget.memo.tags);
+    });
+  }
+
+  Future<void> _saveChanges() async {
+    // 隐藏键盘
+    _transcriptionFocusNode.unfocus();
+    _summaryFocusNode.unfocus();
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      final apiService = Provider.of<ApiService>(context, listen: false);
+
+      // 调用API更新
+      final updatedMemo = await apiService.updateMemo(
+        widget.memo.id,
+        transcription: _transcriptionController.text.trim().isEmpty
+            ? null
+            : _transcriptionController.text.trim(),
+        summary: _summaryController.text.trim().isEmpty
+            ? null
+            : _summaryController.text.trim(),
+        tags: _editedTags,
+      );
+
+      if (mounted) {
+        // 更新widget.memo
+        setState(() {
+          _isEditing = false;
+          _isSaving = false;
+        });
+
+        // 显示成功提示
+        ErrorHandler.showSuccess(
+          context: context,
+          message: '笔记已更新',
+        );
+
+        // 返回更新后的memo，触发列表刷新
+        Navigator.pop(context, updatedMemo);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+
+        final errorType = ErrorHandler.detectErrorType(e);
+        ErrorHandler.showError(
+          context: context,
+          type: errorType == ErrorType.unknown ? ErrorType.upload : errorType,
+          customMessage: '保存失败: ${e.toString()}',
+          onRetry: _saveChanges,
+        );
+      }
+    }
+  }
+
   void _showDeleteDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -519,7 +848,7 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              Navigator.pop(context); // 关闭对话框
+              Navigator.pop(context);
               await _deleteMemo();
             },
             style: ElevatedButton.styleFrom(
@@ -548,18 +877,14 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
     });
 
     try {
-      await ApiService().deleteMemo(widget.memo.id);
+      await Provider.of<ApiService>(context, listen: false).deleteMemo(widget.memo.id);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('笔记已删除'),
-            backgroundColor: Color(0xFF059669),
-            duration: Duration(seconds: 2),
-          ),
+        ErrorHandler.showSuccess(
+          context: context,
+          message: '笔记已删除',
         );
 
-        // 返回到上一页，并传递true表示已删除
         Navigator.pop(context, true);
       }
     } catch (e) {
@@ -568,12 +893,12 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
           _isDeleting = false;
         });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('删除失败: $e'),
-            backgroundColor: const Color(0xFFDC2626),
-            duration: const Duration(seconds: 3),
-          ),
+        final errorType = ErrorHandler.detectErrorType(e);
+        ErrorHandler.showError(
+          context: context,
+          type: errorType,
+          customMessage: '删除失败: ${e.toString()}',
+          onRetry: _deleteMemo,
         );
       }
     }

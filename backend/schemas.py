@@ -27,6 +27,12 @@ class MemoBase(BaseModel):
 class MemoCreate(MemoBase):
     pass  # Usually handled via file upload
 
+class MemoUpdate(BaseModel):
+    """Memo更新schema - 支持部分更新"""
+    transcription: Optional[str] = None
+    summary: Optional[str] = None
+    tags: Optional[List[str]] = None
+
 class MemoResponse(BaseModel):
     id: int
     audio_path: str
@@ -38,6 +44,6 @@ class MemoResponse(BaseModel):
     status: str
     created_at: datetime
     updated_at: Optional[datetime] = None
-    
+
     class Config:
         from_attributes = True
