@@ -97,6 +97,8 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
               _buildMood(),
               const SizedBox(height: 20),
             ],
+            _buildRelatedMemos(),
+            const SizedBox(height: 20),
             _buildAudioPlayer(),
             const SizedBox(height: 40),
           ],
@@ -868,6 +870,181 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildRelatedMemos() {
+    return FutureBuilder<List<Memo>>(
+      future: Provider.of<ApiService>(context, listen: false)
+          .getRelatedMemos(widget.memo.id),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox.shrink();
+        }
+
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final relatedMemos = snapshot.data!;
+
+        return _buildGlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF8B5CF6).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.link,
+                      color: Color(0xFF8B5CF6),
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    '相关笔记',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF8B5CF6),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              ...relatedMemos.map((relatedMemo) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _buildRelatedMemoCard(relatedMemo),
+                );
+              }).toList(),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildRelatedMemoCard(Memo memo) {
+    final tag = memo.tags.isNotEmpty ? memo.tags.first : '未分类';
+    final tagColor = _getTagColor(tag);
+
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => MemoDetailScreen(memo: memo),
+          ),
+        ).then((result) {
+          if (result == true && mounted) {
+            // 如果相关笔记被删除或修改，刷新当前页面
+            Navigator.pop(context, true);
+          }
+        });
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.5),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: const Color(0xFF8B5CF6).withOpacity(0.2),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 4,
+              height: 60,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    const Color(0xFF8B5CF6),
+                    const Color(0xFF8B5CF6).withOpacity(0.3),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        DateFormat('MM/dd HH:mm').format(memo.createdAt),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: const Color(0xFF164E63).withOpacity(0.6),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: tagColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          tag,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: tagColor,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    memo.summary ?? memo.transcription ?? '暂无内容',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: const Color(0xFF164E63),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.arrow_forward_ios,
+              size: 14,
+              color: const Color(0xFF8B5CF6).withOpacity(0.5),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _getTagColor(String tag) {
+    final colors = {
+      '工作': const Color(0xFF0891B2),
+      '情绪': const Color(0xFF059669),
+      '灵感': const Color(0xFF8B5CF6),
+      '生活': const Color(0xFFEC4899),
+      '学习': const Color(0xFF3B82F6),
+      '会议': const Color(0xFFF59E0B),
+    };
+
+    return colors[tag] ?? const Color(0xFF0891B2);
   }
 
   Widget _buildAudioPlayer() {

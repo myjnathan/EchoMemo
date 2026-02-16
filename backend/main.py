@@ -280,6 +280,62 @@ async def get_memo(
         raise HTTPException(status_code=404, detail="Memo not found")
     return memo
 
+@app.get("/memos/{memo_id}/related", response_model=List[schemas.MemoResponse])
+async def get_related_memos(
+    memo_id: int,
+    limit: int = 5,
+    db: Session = Depends(get_db)
+):
+    """
+    获取与指定笔记相关的其他笔记
+    基于标签和情绪相似度计算推荐分数
+    """
+    # 获取当前笔记
+    current_memo = db.query(models.Memo)\
+        .filter(models.Memo.id == memo_id, models.Memo.user_id == 1)\
+        .first()
+
+    if not current_memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+
+    # 获取所有其他笔记
+    other_memos = db.query(models.Memo)\
+        .filter(models.Memo.user_id == 1, models.Memo.id != memo_id)\
+        .order_by(models.Memo.created_at.desc())\
+        .all()
+
+    # 计算每个笔记的相关性分数
+    scored_memos = []
+    for memo in other_memos:
+        score = 0.0
+
+        # 1. 标签重叠度 (权重: 0.6)
+        if current_memo.tags and memo.tags:
+            current_tags = set(current_memo.tags)
+            memo_tags = set(memo.tags)
+            intersection = current_tags & memo_tags
+            union = current_tags | memo_tags
+            if union:
+                tag_similarity = len(intersection) / len(union)
+                score += tag_similarity * 0.6
+
+        # 2. 情绪相似度 (权重: 0.4)
+        if current_memo.mood_score is not None and memo.mood_score is not None:
+            mood_diff = abs(current_memo.mood_score - memo.mood_score)
+            mood_similarity = max(0, 1 - mood_diff / 2)  # 情绪差异越小，相似度越高
+            score += mood_similarity * 0.4
+
+        # 只有分数大于0才添加
+        if score > 0:
+            scored_memos.append((memo, score))
+
+    # 按分数降序排序，取前N个
+    scored_memos.sort(key=lambda x: x[1], reverse=True)
+    related_memos = [memo for memo, score in scored_memos[:limit]]
+
+    logger.info(f"Memo #{memo_id}: 找到 {len(related_memos)} 个相关笔记")
+    return related_memos
+
 @app.delete("/memos/{memo_id}")
 async def delete_memo(
     memo_id: int,

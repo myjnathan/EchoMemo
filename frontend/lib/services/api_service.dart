@@ -217,6 +217,35 @@ class ApiService {
     }
   }
 
+  Future<List<Memo>> getRelatedMemos(int memoId, {int limit = 5}) async {
+    logger.i('获取 memo #$memoId 的相关笔记');
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/memos/$memoId/related?limit=$limit'),
+        headers: _headers,
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          logger.e('获取相关笔记超时');
+          throw SocketException('Connection timeout');
+        },
+      );
+
+      if (response.statusCode == 200) {
+        List<dynamic> body = jsonDecode(utf8.decode(response.bodyBytes));
+        final memos = body.map((dynamic item) => Memo.fromJson(item)).toList();
+        logger.i('成功获取 ${memos.length} 个相关笔记');
+        return memos;
+      } else {
+        logger.e('获取相关笔记失败: ${response.statusCode}');
+        return [];
+      }
+    } on SocketException catch (e, stackTrace) {
+      logger.e('网络错误', error: e, stackTrace: stackTrace);
+      return [];
+    }
+  }
+
   /// 清除缓存
   void _invalidateCache() {
     _cachedMemos = null;
