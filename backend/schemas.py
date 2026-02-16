@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Dict
 from datetime import datetime
 
 class Token(BaseModel):
@@ -33,15 +33,25 @@ class MemoUpdate(BaseModel):
     summary: Optional[str] = None
     tags: Optional[List[str]] = None
 
+class StructuredSummary(BaseModel):
+    """结构化摘要schema (Phase 2)"""
+    core_message: Optional[str] = None  # 一句话核心信息
+    key_points: List[str] = []  # 关键点列表
+    action_items: List[str] = []  # 行动项列表
+    topics: List[str] = []  # 主题列表
+
 class MemoResponse(BaseModel):
     id: int
     audio_path: str
     transcription: Optional[str] = None
-    summary: Optional[str] = None
+    summary: Optional[str] = None  # Legacy summary (for backward compatibility)
+    structured_summary: Optional[StructuredSummary] = None  # Phase 2 structured summary
     tags: Optional[List[str]] = []
     mood_score: Optional[float] = None
     mood_label: Optional[str] = None
     status: str
+    embedding: Optional[List[float]] = None  # Phase 2: text embedding vector
+    related_memo_ids: List[int] = []  # Phase 2: related memo IDs
     created_at: datetime
     updated_at: Optional[datetime] = None
 

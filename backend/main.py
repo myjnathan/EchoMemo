@@ -165,6 +165,15 @@ async def process_memo(memo_id: int, audio_path: str):
         logger.info(f"  - 标签: {analysis.get('tags', [])}")
         logger.info(f"  - 情感: {analysis.get('mood_label', 'N/A')} ({analysis.get('mood_score', 0)})")
 
+        # Log structured summary if available
+        if 'structured_summary' in analysis:
+            structured = analysis['structured_summary']
+            logger.info(f"  - 结构化摘要:")
+            logger.info(f"    * 核心信息: {structured.get('core_message', 'N/A')}")
+            logger.info(f"    * 关键点: {structured.get('key_points', [])}")
+            logger.info(f"    * 行动项: {structured.get('action_items', [])}")
+            logger.info(f"    * 主题: {structured.get('topics', [])}")
+
         # 3. Update DB
         logger.info("\n[3/3] 💾 更新数据库...")
         from database import SessionLocal
@@ -174,6 +183,11 @@ async def process_memo(memo_id: int, audio_path: str):
             if memo:
                 memo.transcription = transcription
                 memo.summary = analysis.get("summary")
+
+                # Phase 2: 保存结构化摘要
+                if 'structured_summary' in analysis:
+                    memo.structured_summary = analysis['structured_summary']
+
                 memo.tags = analysis.get("tags")
                 memo.mood_score = analysis.get("mood_score")
                 memo.mood_label = analysis.get("mood_label")

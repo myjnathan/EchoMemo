@@ -81,6 +81,10 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
             const SizedBox(height: 20),
             _buildTranscription(),
             const SizedBox(height: 20),
+            if (widget.memo.status == 'completed' && widget.memo.structuredSummary != null) ...[
+              _buildStructuredSummary(),
+              const SizedBox(height: 20),
+            ],
             if (widget.memo.status == 'completed') ...[
               _buildSummary(),
               const SizedBox(height: 20),
@@ -279,6 +283,265 @@ class _MemoDetailScreenState extends State<MemoDetailScreen> {
             ),
         ],
       ),
+    );
+  }
+
+  Widget _buildStructuredSummary() {
+    final structured = widget.memo.structuredSummary!;
+    final hasContent = structured.coreMessage != null ||
+        structured.keyPoints.isNotEmpty ||
+        structured.actionItems.isNotEmpty ||
+        structured.topics.isNotEmpty;
+
+    if (!hasContent) return const SizedBox.shrink();
+
+    return _buildGlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF8B5CF6).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.auto_awesome,
+                  color: Color(0xFF8B5CF6),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'AI 智能分析',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF8B5CF6),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // 核心信息
+          if (structured.coreMessage != null && structured.coreMessage!.isNotEmpty) ...[
+            _buildSummaryItem(
+              icon: Icons.lightbulb_outline,
+              iconColor: Color(0xFFF59E0B),
+              title: '核心信息',
+              content: structured.coreMessage!,
+              isHighlighted: true,
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          // 关键点
+          if (structured.keyPoints.isNotEmpty) ...[
+            _buildSummaryList(
+              icon: Icons.check_circle_outline,
+              iconColor: Color(0xFF059669),
+              title: '关键点',
+              items: structured.keyPoints,
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          // 行动项
+          if (structured.actionItems.isNotEmpty) ...[
+            _buildSummaryList(
+              icon: Icons.task_alt,
+              iconColor: Color(0xFF0891B2),
+              title: '行动项',
+              items: structured.actionItems,
+              showCheckboxes: true,
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          // 主题
+          if (structured.topics.isNotEmpty) ...[
+            _buildTopicChips(structured.topics),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryItem({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String content,
+    bool isHighlighted = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isHighlighted
+            ? const Color(0xFFF59E0B).withOpacity(0.1)
+            : Colors.white.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isHighlighted
+              ? const Color(0xFFF59E0B).withOpacity(0.3)
+              : Colors.white.withOpacity(0.8),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: iconColor, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: iconColor,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  content,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: isHighlighted ? FontWeight.w600 : FontWeight.normal,
+                    color: const Color(0xFF164E63),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryList({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required List<String> items,
+    bool showCheckboxes = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: iconColor, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: iconColor,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ...items.map((item) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (showCheckboxes)
+                    Icon(
+                      Icons.check_box_outline_blank,
+                      size: 18,
+                      color: const Color(0xFF0891B2).withOpacity(0.5),
+                    )
+                  else
+                    Text(
+                      '•',
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: iconColor.withOpacity(0.7),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      item,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        height: 1.4,
+                        color: Color(0xFF164E63),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )),
+      ],
+    );
+  }
+
+  Widget _buildTopicChips(List<String> topics) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(
+              Icons.tag,
+              color: Color(0xFF8B5CF6),
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '主题',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF8B5CF6),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: topics.map((topic) {
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    const Color(0xFF8B5CF6).withOpacity(0.1),
+                    const Color(0xFF8B5CF6).withOpacity(0.2),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: const Color(0xFF8B5CF6).withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+              child: Text(
+                topic,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF8B5CF6),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 
