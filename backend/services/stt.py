@@ -113,7 +113,8 @@ class VolcengineSTTService(STTService):
         timeout: float = TIMEOUT,
         max_retries: int = MAX_RETRIES,
         resource_id: Optional[str] = None,
-        base_url: Optional[str] = None
+        base_url: Optional[str] = None,
+        language: str = "zh"  # 默认中文
     ):
         """
         初始化火山引擎STT服务
@@ -126,6 +127,7 @@ class VolcengineSTTService(STTService):
             max_retries: 最大重试次数
             resource_id: 资源ID（默认使用模型2.0）
             base_url: 音频文件的公网访问URL前缀（用于生成可访问的音频URL）
+            language: 识别语言，默认"zh"（中文），可选"en"（英文）、"yue"（粤语）
         """
         self.app_id = app_id
         self.access_key = access_key
@@ -134,8 +136,9 @@ class VolcengineSTTService(STTService):
         self.max_retries = max_retries
         self.resource_id = resource_id or self.RESOURCE_ID_V2
         self.base_url = base_url
+        self.language = language
 
-        logger.info(f"初始化火山引擎STT服务: app_id={app_id}, resource_id={self.resource_id}")
+        logger.info(f"初始化火山引擎STT服务: app_id={app_id}, resource_id={self.resource_id}, language={language}")
 
     def __del__(self):
         """清理资源"""
@@ -237,6 +240,7 @@ class VolcengineSTTService(STTService):
             },
             "request": {
                 "model_name": "bigmodel",
+                "language": self.language,  # 使用配置的语言
                 "enable_itn": True,  # 启用逆文本标准化
                 "enable_punc": True,  # 启用标点符号
             }
@@ -608,13 +612,18 @@ def get_stt_service():
         else:
             logger.warning("⚠️  SERVER_URL 未配置，将尝试自动获取")
 
+        # 获取语言配置（默认中文）
+        language = getattr(settings, 'STT_LANGUAGE', 'zh')
+        logger.info(f"  - STT_LANGUAGE: {language} (zh=中文, en=英文, yue=粤语)")
+
         logger.info("=" * 60)
         return VolcengineSTTService(
             app_id=settings.STT_APP_ID,
             access_key=settings.STT_ACCESS_KEY,
             secret_key=settings.STT_SECRET_KEY,
             resource_id="volc.seedasr.auc",  # 使用标准版模型2.0
-            base_url=server_url
+            base_url=server_url,
+            language=language  # 设置语言
         )
     else:
         logger.warning("⚠️  STT API未完全配置，使用模拟服务")

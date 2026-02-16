@@ -30,18 +30,18 @@ class DeepSeekLLMService(LLMService):
     async def analyze(self, text: str) -> dict:
         if not self.api_key:
             return await MockLLMService().analyze(text)
-            
+
         system_prompt = """
-        You are an AI assistant for a voice journal app.
-        Analyze the given text and return a JSON object with:
-        1. summary: A concise summary (max 50 chars).
-        2. tags: A list of 1-3 keywords.
-        3. mood_score: A float from -1.0 (negative) to 1.0 (positive).
-        4. mood_label: One word description of the mood (e.g., Happy, Anxious, Calm).
-        
-        Return ONLY valid JSON.
+        你是一个语音日记应用的AI助手。
+        分析给定的文本，返回一个JSON对象，包含以下字段：
+        1. summary: 简洁的中文摘要（最多50个字符）
+        2. tags: 1-3个中文关键词列表
+        3. mood_score: -1.0（消极）到1.0（积极）的浮点数
+        4. mood_label: 一个词语描述情绪（例如：开心、焦虑、平静、兴奋、疲惫等）
+
+        请只返回有效的JSON格式，不要包含其他文本。
         """
-        
+
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.post(

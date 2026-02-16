@@ -5,66 +5,35 @@ import '../models/memo.dart';
 
 class ApiService {
   // Updated to port 80 (default HTTP port)
-  static const String baseUrl = 'http://118.145.114.187'; 
+  static const String baseUrl = 'http://118.145.114.187';
   // For local emulator use: 'http://10.0.2.2:8000';
 
-  String? _token;
-
-  void setToken(String token) {
-    _token = token;
-  }
+  // MVP模式：移除认证依赖
+  // String? _token;
+  //
+  // void setToken(String token) {
+  //   _token = token;
+  // }
 
   Map<String, String> get _headers {
-    final headers = <String, String>{
+    // MVP模式：不需要Authorization头
+    return {
       'Content-Type': 'application/json',
     };
-    if (_token != null) {
-      headers['Authorization'] = 'Bearer $_token';
-    }
-    return headers;
+    // 原认证代码已移除：
+    // if (_token != null) {
+    //   headers['Authorization'] = 'Bearer $_token';
+    // }
   }
 
-  Future<String> login(String username, String password) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/token'),
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: {
-        'username': username,
-        'password': password,
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final body = jsonDecode(response.body);
-      final token = body['access_token'];
-      _token = token;
-      return token;
-    } else {
-      throw Exception('Failed to login: ${response.body}');
-    }
-  }
-
-  Future<void> register(String username, String password) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/users/'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'username': username,
-        'password': password,
-      }),
-    );
-
-    if (response.statusCode != 200) {
-      throw Exception('Failed to register: ${response.body}');
-    }
-  }
+  // MVP模式：移除登录和注册方法
+  // Future<String> login(String username, String password) async { ... }
+  // Future<void> register(String username, String password) async { ... }
 
   Future<List<Memo>> getMemos() async {
     final response = await http.get(
       Uri.parse('$baseUrl/memos'),
-      headers: _headers,
+      headers: _headers,  // MVP模式：不需要Authorization
     );
 
     if (response.statusCode == 200) {
@@ -79,11 +48,12 @@ class ApiService {
 
   Future<Memo> uploadAudio(String filePath) async {
     var request = http.MultipartRequest('POST', Uri.parse('$baseUrl/upload'));
-    
-    // Add Authorization header manually for MultipartRequest
-    if (_token != null) {
-      request.headers['Authorization'] = 'Bearer $_token';
-    }
+
+    // MVP模式：移除Authorization头
+    // 原认证代码已移除：
+    // if (_token != null) {
+    //   request.headers['Authorization'] = 'Bearer $_token';
+    // }
 
     request.files.add(await http.MultipartFile.fromPath('file', filePath));
 
