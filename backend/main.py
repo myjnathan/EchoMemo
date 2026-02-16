@@ -265,3 +265,32 @@ async def get_memo(
     if not memo:
         raise HTTPException(status_code=404, detail="Memo not found")
     return memo
+
+@app.delete("/memos/{memo_id}")
+async def delete_memo(
+    memo_id: int,
+    db: Session = Depends(get_db)
+    # MVP模式：移除认证依赖，删除默认用户（id=1）的memo
+    # current_user: models.User = Depends(get_current_user)
+):
+    # MVP模式：硬编码删除默认用户（id=1）的memo
+    memo = db.query(models.Memo)\
+        .filter(models.Memo.id == memo_id, models.Memo.user_id == 1)\
+        .first()
+    if not memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+
+    # 删除音频文件
+    if memo.audio_path and os.path.exists(memo.audio_path):
+        try:
+            os.remove(memo.audio_path)
+            logger.info(f"✅ 已删除音频文件: {memo.audio_path}")
+        except Exception as e:
+            logger.warning(f"⚠️  删除音频文件失败: {e}")
+
+    # 删除数据库记录
+    db.delete(memo)
+    db.commit()
+    logger.info(f"✅ 已删除 Memo #{memo_id}")
+
+    return {"message": "Memo deleted successfully", "id": memo_id}

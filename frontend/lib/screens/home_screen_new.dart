@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../models/memo.dart';
 import '../services/api_service.dart';
 import 'recorder_screen_new.dart';
+import 'memo_detail_screen.dart';
+import '../widgets/search_highlighted_text.dart';
 import 'package:intl/intl.dart';
 
 class HomeScreenNew extends StatefulWidget {
@@ -16,6 +18,7 @@ class HomeScreenNew extends StatefulWidget {
 class _HomeScreenNewState extends State<HomeScreenNew> {
   late Future<List<Memo>> _memosFuture;
   Timer? _refreshTimer;
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -63,22 +66,73 @@ class _HomeScreenNewState extends State<HomeScreenNew> {
     });
   }
 
+  List<Memo> _filterMemos(List<Memo> memos) {
+    if (_searchQuery.isEmpty) return memos;
+
+    final query = _searchQuery.toLowerCase();
+    return memos.where((memo) {
+      // 搜索转录文本
+      if (memo.transcription?.toLowerCase().contains(query) == true) {
+        return true;
+      }
+
+      // 搜索摘要
+      if (memo.summary?.toLowerCase().contains(query) == true) {
+        return true;
+      }
+
+      // 搜索标签
+      if (memo.tags.any((tag) => tag.toLowerCase().contains(query))) {
+        return true;
+      }
+
+      return false;
+    }).toList();
+  }
+
+  Future<void> _handleRefresh() async {
+    // 取消现有的定时器
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
+
+    // 刷新数据
+    _refreshMemos();
+
+    // 等待一小段时间确保刷新完成
+    await Future.delayed(const Duration(milliseconds: 500));
+  }
+
+  @override
+  void didUpdateWidget(HomeScreenNew oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 当widget更新时（比如从详情页返回），检查是否需要刷新
+    _refreshMemos();
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(),
-            const SizedBox(height: 24),
-            _buildQuickRecord(context),
-            const SizedBox(height: 24),
-            _buildStats(),
-            const SizedBox(height: 24),
-            _buildRecentMemos(),
-          ],
+      child: RefreshIndicator(
+        onRefresh: _handleRefresh,
+        color: const Color(0xFF0891B2),
+        backgroundColor: const Color(0xFFECFEFF),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeader(),
+              const SizedBox(height: 16),
+              _buildSearchBox(),
+              const SizedBox(height: 24),
+              _buildQuickRecord(context),
+              const SizedBox(height: 24),
+              _buildStats(),
+              const SizedBox(height: 24),
+              _buildRecentMemos(),
+            ],
+          ),
         ),
       ),
     );
@@ -121,6 +175,61 @@ class _HomeScreenNewState extends State<HomeScreenNew> {
           child: const Icon(Icons.person, color: Colors.white),
         ),
       ],
+    );
+  }
+
+  Widget _buildSearchBox() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.7),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFF0891B2).withOpacity(0.3),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0891B2).withOpacity(0.1),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: TextField(
+        decoration: InputDecoration(
+          hintText: '搜索笔记...',
+          hintStyle: TextStyle(
+            color: const Color(0xFF164E63).withOpacity(0.5),
+          ),
+          prefixIcon: const Icon(
+            Icons.search,
+            color: Color(0xFF0891B2),
+          ),
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(
+                    Icons.clear,
+                    color: Color(0xFF0891B2),
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _searchQuery = '';
+                    });
+                  },
+                )
+              : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
+        ),
+        onChanged: (value) {
+          setState(() {
+            _searchQuery = value;
+          });
+        },
+      ),
     );
   }
 
@@ -221,9 +330,9 @@ class _HomeScreenNewState extends State<HomeScreenNew> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              '最近记录',
-              style: TextStyle(
+            Text(
+              _searchQuery.isEmpty ? '最近记录' : '搜索结果',
+              style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF164E63),
@@ -250,10 +359,32 @@ class _HomeScreenNewState extends State<HomeScreenNew> {
               return _buildEmptyState();
             }
 
-            final memos = snapshot.data!.take(2).toList();
+            // 应用搜索过滤
+            final memos = _filterMemos(snapshot.data!);
+            final displayMemos = _searchQuery.isEmpty ? memos.take(2).toList() : memos;
+
+            if (displayMemos.isEmpty) {
+              return Column(
+                children: [
+                  Icon(
+                    Icons.search_off,
+                    size: 48,
+                    color: const Color(0xFF0891B2).withOpacity(0.5),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '未找到匹配的笔记',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: const Color(0xFF164E63).withOpacity(0.6),
+                    ),
+                  ),
+                ],
+              );
+            }
 
             return Column(
-              children: memos.map((memo) {
+              children: displayMemos.map((memo) {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: _buildMemoCard(memo),
@@ -271,6 +402,20 @@ class _HomeScreenNewState extends State<HomeScreenNew> {
     final tagColor = _getTagColor(tag);
 
     return GlassCard(
+      onTap: () async {
+        // 导航到详情页，等待返回结果
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => MemoDetailScreen(memo: memo),
+          ),
+        );
+
+        // 如果返回true，表示删除了memo，需要刷新列表
+        if (result == true && mounted) {
+          _refreshMemos();
+        }
+      },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -303,8 +448,9 @@ class _HomeScreenNewState extends State<HomeScreenNew> {
           ),
           const SizedBox(height: 8),
           if (memo.summary != null && memo.summary!.isNotEmpty)
-            Text(
-              memo.summary!,
+            SearchHighlightedText(
+              text: memo.summary!,
+              query: _searchQuery,
               style: const TextStyle(
                 fontSize: 14,
                 color: Color(0xFF164E63),
@@ -313,8 +459,9 @@ class _HomeScreenNewState extends State<HomeScreenNew> {
               overflow: TextOverflow.ellipsis,
             )
           else if (memo.transcription != null && memo.transcription!.isNotEmpty)
-            Text(
-              memo.transcription!,
+            SearchHighlightedText(
+              text: memo.transcription!,
+              query: _searchQuery,
               style: const TextStyle(
                 fontSize: 14,
                 color: Color(0xFF164E63),

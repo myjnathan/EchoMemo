@@ -5,6 +5,7 @@ import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import '../services/api_service.dart';
+import '../services/error_handler.dart';
 
 class RecorderScreenNew extends StatefulWidget {
   const RecorderScreenNew({super.key});
@@ -54,12 +55,24 @@ class _RecorderScreenNewState extends State<RecorderScreenNew> with SingleTicker
           _isRecording = true;
           _audioPath = path;
         });
+      } else {
+        // 权限被拒绝
+        if (mounted) {
+          ErrorHandler.showError(
+            context: context,
+            type: ErrorType.permission,
+            onRetry: _startRecording,
+          );
+        }
       }
     } catch (e) {
-      print("Error starting record: $e");
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('录音启动失败: $e')),
+        final errorType = ErrorHandler.detectErrorType(e);
+        ErrorHandler.showError(
+          context: context,
+          type: errorType == ErrorType.unknown ? ErrorType.permission : errorType,
+          customMessage: '录音启动失败: $e',
+          onRetry: _startRecording,
         );
       }
     }
@@ -77,10 +90,13 @@ class _RecorderScreenNewState extends State<RecorderScreenNew> with SingleTicker
         await _uploadRecording(path);
       }
     } catch (e) {
-      print("Error stopping record: $e");
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('录音停止失败: $e')),
+        final errorType = ErrorHandler.detectErrorType(e);
+        ErrorHandler.showError(
+          context: context,
+          type: errorType,
+          customMessage: '录音停止失败: $e',
+          onRetry: _stopRecording,
         );
       }
     }
@@ -93,23 +109,17 @@ class _RecorderScreenNewState extends State<RecorderScreenNew> with SingleTicker
 
     try {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('正在上传...'),
-          duration: Duration(seconds: 2),
-        ),
-      );
 
       final apiService = Provider.of<ApiService>(context, listen: false);
       await apiService.uploadAudio(path);
 
       if (mounted) {
         Navigator.pop(context); // Close modal on success
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ 上传成功，AI正在处理...'),
-            backgroundColor: Color(0xFF059669),
-          ),
+
+        // 显示成功提示
+        ErrorHandler.showSuccess(
+          context: context,
+          message: '上传成功，AI正在处理...',
         );
       }
     } catch (e) {
@@ -117,11 +127,15 @@ class _RecorderScreenNewState extends State<RecorderScreenNew> with SingleTicker
         setState(() {
           _isUploading = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ 上传失败: $e'),
-            backgroundColor: Colors.red,
-          ),
+
+        final errorType = ErrorHandler.detectErrorType(e);
+        final finalErrorType = errorType == ErrorType.unknown ? ErrorType.upload : errorType;
+
+        ErrorHandler.showError(
+          context: context,
+          type: finalErrorType,
+          customMessage: '上传失败: ${e.toString()}',
+          onRetry: () => _uploadRecording(path),
         );
       }
     }

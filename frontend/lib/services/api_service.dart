@@ -46,6 +46,32 @@ class ApiService {
     }
   }
 
+  Future<Memo> getMemo(int memoId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/memos/$memoId'),
+      headers: _headers,
+    );
+
+    if (response.statusCode == 200) {
+      return Memo.fromJson(jsonDecode(utf8.decode(response.bodyBytes)));
+    } else if (response.statusCode == 404) {
+      throw Exception('Memo not found');
+    } else {
+      throw Exception('Failed to load memo: ${response.statusCode}');
+    }
+  }
+
+  Future<void> deleteMemo(int memoId) async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/memos/$memoId'),
+      headers: _headers,
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to delete memo: ${response.statusCode}');
+    }
+  }
+
   Future<Memo> uploadAudio(String filePath) async {
     var request = http.MultipartRequest('POST', Uri.parse('$baseUrl/upload'));
 

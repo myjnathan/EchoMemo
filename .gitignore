@@ -48,3 +48,9 @@ backend/*.db
 
 # Logs
 *.log
+
+# 完成报告文档（不提交到Git）
+*完成报告.md
+*完成报告/
+docs/phases/phase-01-container.md
+
