@@ -170,14 +170,29 @@ class _GraphScreenState extends State<GraphScreen> with TickerProviderStateMixin
     }
   }
 
-  void _navigateToMemo() {
+  void _navigateToMemo() async {
     if (_selectedNodeId != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => MemoDetailScreen(memoId: _selectedNodeId!),
-        ),
-      ).then((_) => _loadGraph()); // 返回时刷新
+      try {
+        // Fetch the memo first
+        final apiService = Provider.of<ApiService>(context, listen: false);
+        final memo = await apiService.getMemo(_selectedNodeId!);
+
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => MemoDetailScreen(memo: memo),
+            ),
+          ).then((_) => _loadGraph()); // 返回时刷新
+        }
+      } catch (e) {
+        // Handle error
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('加载笔记失败: $e')),
+          );
+        }
+      }
     }
   }
 
@@ -271,7 +286,7 @@ class _GraphScreenState extends State<GraphScreen> with TickerProviderStateMixin
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.graphql_outlined, size: 64, color: Colors.grey),
+            const Icon(Icons.account_tree, size: 64, color: Colors.grey),
             const SizedBox(height: 16),
             Text(
               '暂无图谱数据',
@@ -361,7 +376,6 @@ class _GraphScreenState extends State<GraphScreen> with TickerProviderStateMixin
             Text(
               '${(_scale * 100).toInt()}%',
               style: theme.textTheme.labelLarge,
-              minLeadingWidth: 40,
             ),
             IconButton(
               icon: const Icon(Icons.zoom_in),
@@ -443,32 +457,32 @@ class _GraphScreenState extends State<GraphScreen> with TickerProviderStateMixin
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('知识图谱'),
-        content: const SingleChildScrollView(
+        content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
+              const Text(
                 '操作指南',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              SizedBox(height: 12),
+              const SizedBox(height: 12),
               _buildInfoItem('🔍 缩放', '双指捏合或使用左下角按钮'),
               _buildInfoItem('✋ 平移', '单指拖动画布'),
               _buildInfoItem('👆 选择', '点击节点查看详情'),
               _buildInfoItem('📊 节点大小', '表示重要程度'),
-              SizedBox(height: 12),
-              Text(
+              const SizedBox(height: 12),
+              const Text(
                 '边的含义',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
               _buildEdgeInfo('🟣 紫色', '语义相似'),
               _buildEdgeInfo('🟠 橙色', '共享标签'),
               _buildEdgeInfo('🔵 蓝色', '情绪相似'),

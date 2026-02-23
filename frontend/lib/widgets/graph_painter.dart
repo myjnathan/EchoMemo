@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:vector_math/vector_math.dart';
 import '../models/graph_node.dart';
 
 /// 知识图谱绘制器
