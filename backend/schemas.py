@@ -57,3 +57,54 @@ class MemoResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ============ Phase 2: Knowledge Graph Schemas ============
+
+class GraphNode(BaseModel):
+    """图节点"""
+    id: int
+    transcription: str
+    summary: Optional[str] = None
+    tags: List[str] = []
+    topics: List[str] = []
+    mood_score: Optional[float] = None
+    created_at: str
+    x: Optional[float] = None
+    y: Optional[float] = None
+
+
+class GraphEdge(BaseModel):
+    """图边"""
+    source: int
+    target: int
+    weight: float
+    relation_type: str  # semantic, tag, mood, temporal
+    metadata: Dict[str, Any] = {}
+
+
+class GraphStats(BaseModel):
+    """图统计信息"""
+    node_count: int
+    edge_count: int
+    relation_types: List[str]
+
+
+class KnowledgeGraphResponse(BaseModel):
+    """知识图谱响应"""
+    nodes: List[GraphNode]
+    edges: List[GraphEdge]
+    stats: GraphStats
+
+
+class GraphPathResponse(BaseModel):
+    """路径查询响应"""
+    path: List[int]  # 节点ID列表
+    length: int  # 路径长度
+    hops: int  # 跳数
+
+
+class GraphCommunityResponse(BaseModel):
+    """社区响应"""
+    communities: List[List[int]]  # 每个社区的节点ID列表
+    community_count: int

@@ -29,6 +29,7 @@ import schemas
 from services.stt import get_stt_service
 from services.llm import get_llm_service
 from services.embedding import get_embedding_service
+from services.knowledge_graph import build_graph_from_memos, compute_layout
 # from auth import create_access_token, get_password_hash, verify_password  # 已禁用：移除认证依赖
 from auth import get_password_hash  # 保留：用于创建默认用户
 # from jose import JWTError, jwt  # 已禁用：移除JWT依赖
@@ -524,4 +525,195 @@ def _keyword_search(db: Session, query: str, skip: int = 0, limit: int = 10):
 
     logger.info(f"✅ 关键词搜索找到 {len(memos)} 个结果")
     return memos
+
+
+# ============ Phase 2: Knowledge Graph APIs ============
+
+@app.get("/graph", response_model=schemas.KnowledgeGraphResponse)
+async def get_knowledge_graph(
+    similarity_threshold: float = 0.5,
+    compute_layout_coords: bool = True,
+    db: Session = Depends(get_db)
+):
+    """
+    获取完整的知识图谱
+
+    参数:
+    - similarity_threshold: 语义相似度阈值 (0-1)
+    - compute_layout_coords: 是否计算节点布局坐标
+    """
+    logger.info(f"📊 构建知识图谱 (阈值: {similarity_threshold})")
+
+    # 获取所有memo
+    memos = db.query(models.Memo)\
+        .filter(models.Memo.user_id == 1)\
+        .order_by(models.Memo.created_at.desc())\
+        .all()
+
+    if not memos:
+        return schemas.KnowledgeGraphResponse(
+            nodes=[],
+            edges=[],
+            stats=schemas.GraphStats(
+                node_count=0,
+                edge_count=0,
+                relation_types=[]
+            )
+        )
+
+    # 构建图
+    graph = build_graph_from_memos(memos, similarity_threshold=similarity_threshold)
+
+    # 计算布局坐标（可选）
+    if compute_layout_coords:
+        compute_layout(graph, width=1000, height=800)
+
+    # 转换为响应格式
+    return schemas.KnowledgeGraphResponse(
+        nodes=[schemas.GraphNode(**node.to_dict()) for node in graph.nodes.values()],
+        edges=[schemas.GraphEdge(**edge.to_dict())
+               for source in graph.edges for edge in graph.edges[source].values()
+               if source < edge.target],
+        stats=schemas.GraphStats(**graph.to_dict()["stats"])
+    )
+
+
+@app.get("/graph/ego/{memo_id}", response_model=schemas.KnowledgeGraphResponse)
+async def get_egocentric_network(
+    memo_id: int,
+    hops: int = 1,
+    db: Session = Depends(get_db)
+):
+    """
+    获取以某个笔记为中心的ego网络
+
+    参数:
+    - memo_id: 中心笔记ID
+    - hops: 跳数（1=直接连接，2=朋友的朋友，以此类推）
+    """
+    logger.info(f"📊 获取 ego 网络: memo #{memo_id}, 跳数: {hops}")
+
+    # 验证memo存在
+    center_memo = db.query(models.Memo)\
+        .filter(models.Memo.id == memo_id, models.Memo.user_id == 1)\
+        .first()
+
+    if not center_memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+
+    # 获取所有memo并构建图
+    all_memos = db.query(models.Memo)\
+        .filter(models.Memo.user_id == 1)\
+        .all()
+
+    graph = build_graph_from_memos(all_memos, similarity_threshold=0.3)
+
+    # 获取ego网络节点
+    ego_node_ids = graph.get_egocentric_network(memo_id, hops=hops)
+
+    if not ego_node_ids:
+        return schemas.KnowledgeGraphResponse(
+            nodes=[],
+            edges=[],
+            stats=schemas.GraphStats(node_count=0, edge_count=0, relation_types=[])
+        )
+
+    # 提取子图
+    subgraph = graph.get_subgraph(ego_node_ids)
+
+    # 计算布局（以中心节点为原点）
+    if center_memo.id in subgraph.nodes:
+        center_node = subgraph.nodes[center_memo.id]
+        center_node.x = 500
+        center_node.y = 400
+        compute_layout(subgraph, width=1000, height=800)
+
+    return schemas.KnowledgeGraphResponse(
+        nodes=[schemas.GraphNode(**node.to_dict()) for node in subgraph.nodes.values()],
+        edges=[schemas.GraphEdge(**edge.to_dict())
+               for source in subgraph.edges for edge in subgraph.edges[source].values()
+               if source < edge.target],
+        stats=schemas.GraphStats(**subgraph.to_dict()["stats"])
+    )
+
+
+@app.get("/graph/path/{from_id}/{to_id}", response_model=schemas.GraphPathResponse)
+async def find_shortest_path(
+    from_id: int,
+    to_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    查找两个笔记之间的最短路径
+
+    参数:
+    - from_id: 起始笔记ID
+    - to_id: 目标笔记ID
+    """
+    logger.info(f"🔍 查找路径: {from_id} -> {to_id}")
+
+    # 验证memos存在
+    from_memo = db.query(models.Memo)\
+        .filter(models.Memo.id == from_id, models.Memo.user_id == 1)\
+        .first()
+
+    to_memo = db.query(models.Memo)\
+        .filter(models.Memo.id == to_id, models.Memo.user_id == 1)\
+        .first()
+
+    if not from_memo or not to_memo:
+        raise HTTPException(status_code=404, detail="One or both memos not found")
+
+    # 构建图
+    all_memos = db.query(models.Memo)\
+        .filter(models.Memo.user_id == 1)\
+        .all()
+
+    graph = build_graph_from_memos(all_memos, similarity_threshold=0.3)
+
+    # 查找路径
+    path = graph.shortest_path(from_id, to_id)
+
+    if path is None:
+        raise HTTPException(status_code=404, detail="No path found between these memos")
+
+    return schemas.GraphPathResponse(
+        path=path,
+        length=len(path),
+        hops=len(path) - 1
+    )
+
+
+@app.get("/graph/communities", response_model=schemas.GraphCommunityResponse)
+async def find_communities(
+    min_size: int = 3,
+    db: Session = Depends(get_db)
+):
+    """
+    发现笔记社区（关联紧密的笔记群组）
+
+    参数:
+    - min_size: 社区最小规模
+    """
+    logger.info(f"📊 发现社区 (最小规模: {min_size})")
+
+    # 获取所有memo并构建图
+    memos = db.query(models.Memo)\
+        .filter(models.Memo.user_id == 1)\
+        .all()
+
+    if not memos:
+        return schemas.GraphCommunityResponse(communities=[], community_count=0)
+
+    graph = build_graph_from_memos(memos, similarity_threshold=0.3)
+
+    # 发现社区
+    communities = graph.find_communities(min_size=min_size)
+
+    logger.info(f"找到 {len(communities)} 个社区")
+
+    return schemas.GraphCommunityResponse(
+        communities=communities,
+        community_count=len(communities)
+    )
 
