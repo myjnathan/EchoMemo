@@ -46,10 +46,9 @@ class _MainScreenState extends State<MainScreen> {
             children: [
               _buildNavItem(0, Icons.home_outlined, Icons.home, '首页'),
               _buildNavItem(1, Icons.article_outlined, Icons.article, '笔记'),
-              const SizedBox(width: 48),
+              const SizedBox(width: 48), // 空间给FAB
               _buildNavItem(2, Icons.account_tree_outlined, Icons.account_tree, '图谱'),
               _buildNavItem(3, Icons.analytics_outlined, Icons.analytics, '洞察'),
-              _buildNavItem(4, Icons.settings_outlined, Icons.settings, '设置'),
             ],
           ),
         ),

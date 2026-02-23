@@ -5,6 +5,7 @@ import '../models/memo.dart';
 import '../services/api_service.dart';
 import 'recorder_screen_new.dart';
 import 'memo_detail_screen.dart';
+import 'settings_screen.dart';
 import '../widgets/search_highlighted_text.dart';
 import 'package:intl/intl.dart';
 
@@ -184,16 +185,26 @@ class _HomeScreenNewState extends State<HomeScreenNew> {
             ),
           ],
         ),
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF0891B2), Color(0xFF22D3EE)],
+        InkWell(
+          onTap: () {
+            // 导航到设置页面
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SettingsScreen()),
+            );
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF0891B2), Color(0xFF22D3EE)],
+              ),
+              borderRadius: BorderRadius.circular(12),
             ),
-            borderRadius: BorderRadius.circular(12),
+            child: const Icon(Icons.settings, color: Colors.white),
           ),
-          child: const Icon(Icons.person, color: Colors.white),
         ),
       ],
     );
