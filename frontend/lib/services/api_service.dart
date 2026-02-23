@@ -292,4 +292,45 @@ class ApiService {
       return [];
     }
   }
+
+  /// 获取知识图谱数据
+  Future<Map<String, dynamic>> getKnowledgeGraph({
+    double similarityThreshold = 0.5,
+    bool computeLayout = true,
+  }) async {
+    logger.i('获取知识图谱数据');
+    try {
+      final params = {
+        'similarity_threshold': similarityThreshold.toString(),
+        'compute_layout_coords': computeLayout.toString(),
+      };
+
+      final uri = Uri.parse('$baseUrl/graph').replace(queryParameters: params);
+      final response = await http.get(
+        uri,
+        headers: _headers,
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          logger.e('获取图谱超时');
+          throw SocketException('Graph fetch timeout');
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        logger.i('成功获取知识图谱');
+        return data as Map<String, dynamic>;
+      } else {
+        logger.e('获取图谱失败: ${response.statusCode}');
+        throw Exception('Failed to load graph: ${response.statusCode}');
+      }
+    } on SocketException catch (e, stackTrace) {
+      logger.e('网络错误', error: e, stackTrace: stackTrace);
+      rethrow;
+    }
+  }
+
+  // 公共httpClient，用于特殊请求
+  http.Client get httpClient => http.Client();
 }

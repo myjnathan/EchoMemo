@@ -4,6 +4,7 @@ import 'memos_screen.dart';
 import 'insights_screen.dart';
 import 'settings_screen.dart';
 import 'recorder_screen_new.dart';
+import 'graph_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -15,9 +16,10 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
 
-  final List<Widget> _screens = [
+  late final List<Widget> _screens = [
     const HomeScreenNew(),
     const MemosScreen(),
+    const GraphScreen(), // 新增：知识图谱
     const InsightsScreen(),
     const SettingsScreen(),
   ];
@@ -45,8 +47,9 @@ class _MainScreenState extends State<MainScreen> {
               _buildNavItem(0, Icons.home_outlined, Icons.home, '首页'),
               _buildNavItem(1, Icons.article_outlined, Icons.article, '笔记'),
               const SizedBox(width: 48),
-              _buildNavItem(2, Icons.analytics_outlined, Icons.analytics, '洞察'),
-              _buildNavItem(3, Icons.settings_outlined, Icons.settings, '设置'),
+              _buildNavItem(2, Icons.account_tree_outlined, Icons.account_tree, '图谱'),
+              _buildNavItem(3, Icons.analytics_outlined, Icons.analytics, '洞察'),
+              _buildNavItem(4, Icons.settings_outlined, Icons.settings, '设置'),
             ],
           ),
         ),
