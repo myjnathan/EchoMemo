@@ -257,4 +257,39 @@ class ApiService {
   Future<List<Memo>> refreshMemos() async {
     return getMemos(forceRefresh: true);
   }
+
+  /// 语义搜索笔记
+  /// 使用自然语言查询，基于embedding向量进行语义搜索
+  Future<List<Memo>> searchMemos(String query, {int skip = 0, int limit = 10}) async {
+    if (query.trim().isEmpty) {
+      return [];
+    }
+
+    logger.i('语义搜索: "$query"');
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/memos/search?q=${Uri.encodeComponent(query)}&skip=$skip&limit=$limit'),
+        headers: _headers,
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          logger.e('搜索超时');
+          throw SocketException('Search timeout');
+        },
+      );
+
+      if (response.statusCode == 200) {
+        List<dynamic> body = jsonDecode(utf8.decode(response.bodyBytes));
+        final memos = body.map((dynamic item) => Memo.fromJson(item)).toList();
+        logger.i('搜索成功，找到 ${memos.length} 个结果');
+        return memos;
+      } else {
+        logger.e('搜索失败: ${response.statusCode}');
+        return [];
+      }
+    } on SocketException catch (e, stackTrace) {
+      logger.e('网络错误', error: e, stackTrace: stackTrace);
+      return [];
+    }
+  }
 }

@@ -22,6 +22,9 @@ class _HomeScreenState extends State<HomeScreen>
   String _searchQuery = '';
   bool _isSearching = false;
   Timer? _refreshTimer;
+  bool _useSemanticSearch = true;  // 默认使用语义搜索
+  List<Memo>? _searchResults;  // 搜索结果缓存
+  bool _isSearchingResults = false;  // 正在执行搜索
 
   @override
   void initState() {
@@ -107,7 +110,15 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   List<Memo> _filterMemos(List<Memo> memos) {
+    // 如果搜索查询为空，返回所有memo
     if (_searchQuery.isEmpty) return memos;
+
+    // 语义搜索模式：返回搜索结果
+    if (_useSemanticSearch) {
+      return _searchResults ?? [];
+    }
+
+    // 关键词搜索模式：本地过滤
     final query = _searchQuery.toLowerCase();
     return memos
         .where((memo) =>
@@ -115,6 +126,37 @@ class _HomeScreenState extends State<HomeScreen>
             (memo.transcription?.toLowerCase().contains(query) ?? false) ||
             memo.tags.any((tag) => tag.toLowerCase().contains(query)))
         .toList();
+  }
+
+  /// 执行语义搜索
+  Future<void> _performSearch(String query) async {
+    if (query.trim().isEmpty) {
+      setState(() {
+        _searchResults = null;
+        _isSearchingResults = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _isSearchingResults = true;
+    });
+
+    try {
+      final apiService = Provider.of<ApiService>(context, listen: false);
+      final results = await apiService.searchMemos(query);
+
+      setState(() {
+        _searchResults = results;
+        _isSearchingResults = false;
+      });
+    } catch (e) {
+      print('搜索失败: $e');
+      setState(() {
+        _searchResults = [];
+        _isSearchingResults = false;
+      });
+    }
   }
 
   @override
@@ -173,18 +215,50 @@ class _HomeScreenState extends State<HomeScreen>
                 child: SearchBar(
                   leading: const Icon(Icons.search),
                   trailing: [
+                    // 切换搜索模式按钮
+                    IconButton(
+                      icon: Icon(_useSemanticSearch ? Icons.psychology : Icons.text_fields),
+                      tooltip: _useSemanticSearch ? '语义搜索' : '关键词搜索',
+                      onPressed: () {
+                        setState(() {
+                          _useSemanticSearch = !_useSemanticSearch;
+                          // 重新执行搜索
+                          if (_searchQuery.isNotEmpty) {
+                            if (_useSemanticSearch) {
+                              _performSearch(_searchQuery);
+                            } else {
+                              // 关键词搜索：清除搜索结果，让_filterMemos处理
+                              setState(() {
+                                _searchResults = null;
+                              });
+                            }
+                          }
+                        });
+                      },
+                    ),
                     IconButton(
                       icon: const Icon(Icons.clear),
                       onPressed: () {
                         setState(() {
                           _searchQuery = '';
+                          _searchResults = null;
                           _isSearching = false;
                         });
                       },
                     ),
                   ],
-                  hintText: '搜索笔记...',
-                  onChanged: (value) => setState(() => _searchQuery = value),
+                  hintText: _useSemanticSearch ? '语义搜索...' : '关键词搜索...',
+                  onChanged: (value) {
+                    setState(() => _searchQuery = value);
+                    // 使用防抖，避免频繁请求
+                    if (_useSemanticSearch) {
+                      Future.delayed(const Duration(milliseconds: 500), () {
+                        if (_searchQuery == value) {
+                          _performSearch(value);
+                        }
+                      });
+                    }
+                  },
                 ),
               ),
             ),

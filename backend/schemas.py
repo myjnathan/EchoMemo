@@ -51,7 +51,7 @@ class MemoResponse(BaseModel):
     mood_label: Optional[str] = None
     status: str
     embedding: Optional[List[float]] = None  # Phase 2: text embedding vector
-    related_memo_ids: List[int] = []  # Phase 2: related memo IDs
+    related_memo_ids: Optional[List[int]] = None  # Phase 2: related memo IDs (nullable for backward compatibility)
     created_at: datetime
     updated_at: Optional[datetime] = None
 

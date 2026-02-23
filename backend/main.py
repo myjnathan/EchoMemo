@@ -28,6 +28,7 @@ import models
 import schemas
 from services.stt import get_stt_service
 from services.llm import get_llm_service
+from services.embedding import get_embedding_service
 # from auth import create_access_token, get_password_hash, verify_password  # 已禁用：移除认证依赖
 from auth import get_password_hash  # 保留：用于创建默认用户
 # from jose import JWTError, jwt  # 已禁用：移除JWT依赖
@@ -191,6 +192,18 @@ async def process_memo(memo_id: int, audio_path: str):
                 memo.tags = analysis.get("tags")
                 memo.mood_score = analysis.get("mood_score")
                 memo.mood_label = analysis.get("mood_label")
+
+                # Phase 2: 生成embedding向量
+                logger.info("📊 生成embedding向量...")
+                try:
+                    embedding_service = get_embedding_service()
+                    # 使用transcription生成embedding
+                    memo.embedding = await embedding_service.encode(transcription)
+                    logger.info(f"✅ Embedding生成成功 (维度: {len(memo.embedding)})")
+                except Exception as e:
+                    logger.warning(f"⚠️  Embedding生成失败: {e}")
+                    memo.embedding = None
+
                 memo.status = "completed"
                 bg_db.commit()
                 logger.info(f"✅ Memo #{memo_id} 更新成功!")
@@ -411,4 +424,104 @@ async def update_memo(
         db.rollback()
         logger.error(f"❌ 更新 Memo #{memo_id} 失败: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to update memo: {str(e)}")
+
+
+@app.get("/memos/search", response_model=List[schemas.MemoResponse])
+async def search_memos(
+    q: str,  # 搜索查询
+    skip: int = 0,
+    limit: int = 10,
+    db: Session = Depends(get_db)
+):
+    """
+    语义搜索笔记
+
+    使用embedding向量计算查询与所有笔记的相似度
+    返回最相似的前N个笔记
+
+    参数:
+    - q: 搜索查询（自然语言）
+    - skip: 跳过前N个结果（分页用）
+    - limit: 返回结果数量（默认10）
+    """
+    if not q or not q.strip():
+        raise HTTPException(status_code=400, detail="Search query cannot be empty")
+
+    logger.info(f"🔍 语义搜索: '{q}'")
+
+    # 获取所有有embedding的笔记
+    all_memos = db.query(models.Memo)\
+        .filter(
+            models.Memo.user_id == 1,
+            models.Memo.embedding.isnot(None),
+            models.Memo.transcription.isnot(None)
+        )\
+        .all()
+
+    if not all_memos:
+        logger.warning("没有可搜索的笔记（需要先有embedding）")
+        return []
+
+    # 生成查询的embedding
+    try:
+        embedding_service = get_embedding_service()
+        query_embedding = await embedding_service.encode(q)
+        logger.info(f"✅ 查询embedding生成成功 (维度: {len(query_embedding)})")
+    except Exception as e:
+        logger.error(f"❌ 生成查询embedding失败: {e}")
+        # 降级到简单的关键词匹配
+        return _keyword_search(db, q, skip, limit)
+
+    # 计算每个笔记的相似度
+    from services.embedding import compute_similarity
+    scored_memos = []
+
+    for memo in all_memos:
+        if memo.embedding:
+            try:
+                similarity = compute_similarity(query_embedding, memo.embedding)
+                # 只保留相似度 > 0.3 的结果（过滤不相关的内容）
+                if similarity > 0.3:
+                    scored_memos.append((memo, similarity))
+            except Exception as e:
+                logger.warning(f"计算相似度失败 (memo #{memo.id}): {e}")
+
+    if not scored_memos:
+        logger.info("没有找到相似的结果")
+        # 降级到关键词搜索
+        return _keyword_search(db, q, skip, limit)
+
+    # 按相似度降序排序
+    scored_memos.sort(key=lambda x: x[1], reverse=True)
+
+    # 分页返回结果
+    results = [memo for memo, score in scored_memos[skip:skip+limit]]
+
+    logger.info(f"✅ 找到 {len(scored_memos)} 个相似结果，返回前 {len(results)} 个")
+    for i, (memo, score) in enumerate(scored_memos[:3]):
+        logger.info(f"  {i+1}. Memo #{memo.id} (相似度: {score:.3f}): {memo.transcription[:30]}...")
+
+    return results
+
+
+def _keyword_search(db: Session, query: str, skip: int = 0, limit: int = 10):
+    """
+    关键词搜索（降级方案）
+
+    当embedding不可用时，使用简单的SQL LIKE匹配
+    """
+    logger.info(f"🔍 使用关键词搜索: '{query}'")
+
+    memos = db.query(models.Memo)\
+        .filter(
+            models.Memo.user_id == 1,
+            models.Memo.transcription.ilike(f"%{query}%")
+        )\
+        .order_by(models.Memo.created_at.desc())\
+        .offset(skip)\
+        .limit(limit)\
+        .all()
+
+    logger.info(f"✅ 关键词搜索找到 {len(memos)} 个结果")
+    return memos
 

@@ -11,3 +11,8 @@ passlib[bcrypt]
 bcrypt==4.0.1
 python-jose[cryptography]
 psycopg2-binary
+# For semantic search
+sentence-transformers
+scikit-learn
+jieba
+numpy
